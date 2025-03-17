@@ -59,7 +59,7 @@ extension Data {
 			throw URLError(.badURL)
 		}
 		let queue = DispatchQueue.global(qos:Task.currentPriority.dispatchQoSClass)
-		let fileDescriptor = try FileDescriptor.open(filePath, .writeOnly)
+		let fileDescriptor = try FileDescriptor.open(filePath, .readOnly)
 		defer {
 			do {
 				try fileDescriptor.close()
