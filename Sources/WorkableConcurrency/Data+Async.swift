@@ -14,10 +14,12 @@ import System
 @available(macOS 11.0, iOS 14.0, watchOS 7.0, *)
 extension Data {
 	
-	///throws URLError(.badURL)
 	public func asyncWrite(to url:URL)async throws {
+		guard url.scheme == "file" else {
+			throw CocoaError(.fileWriteUnsupportedScheme)
+		}
 		guard let filePath = FilePath(url) else {
-			throw URLError(.badURL)
+			throw CocoaError(.fileWriteInvalidFileName)
 		}
 		let queue = DispatchQueue.global(qos:Task.currentPriority.dispatchQoSClass)
 		let fileDescriptor = try FileDescriptor.open(filePath, .writeOnly)
@@ -40,14 +42,20 @@ extension Data {
 		try await withCheckedThrowingContinuation { continuation in
 			DispatchIO.write(
 				toFileDescriptor: fileDescriptor.rawValue
-				, data: data
-				, runningHandlerOn: queue) { data, error in
+				,data: data
+				,runningHandlerOn: queue) { data, error in
 					if error == 0 {
 						continuation.resume()
 					}
 					else {
-						//TODO: interpret dispatchio error codes
-						continuation.resume(throwing: CocoaError(.fileWriteUnknown))
+						continuation.resume(
+							throwing:
+								CocoaError(
+									errno:error
+									,operation: .write
+									,userInfo: [NSURLErrorKey:url]
+								)
+						)
 					}
 				}
 		}
@@ -55,8 +63,11 @@ extension Data {
 	
 	
 	public init(asyncContentsOf url:URL)async throws {
+		guard url.scheme == "file" else {
+			throw CocoaError(.fileReadUnsupportedScheme)
+		}
 		guard let filePath = FilePath(url) else {
-			throw URLError(.badURL)
+			throw CocoaError(.fileReadInvalidFileName)
 		}
 		let queue = DispatchQueue.global(qos:Task.currentPriority.dispatchQoSClass)
 		let fileDescriptor = try FileDescriptor.open(filePath, .readOnly)
@@ -70,11 +81,17 @@ extension Data {
 		self = try await withCheckedThrowingContinuation({ continuation in
 			DispatchIO.read(
 				fromFileDescriptor: fileDescriptor.rawValue
-				, maxLength: Int(SIZE_MAX)//means read to end of file
-				, runningHandlerOn: queue) { data, error in
+				,maxLength: Int(SIZE_MAX)//means read to end of file
+				,runningHandlerOn: queue) { data, error in
 					guard error == 0 else {
-						//TODO: interpret dispatchio error codes
-						continuation.resume(throwing: CocoaError(.fileReadUnknown))
+						continuation.resume(
+							throwing:
+								CocoaError(
+									errno:error
+									,operation: .read
+									,userInfo: [NSURLErrorKey:url]
+								)
+							)
 						return
 					}
 					var subData = Data()
@@ -89,5 +106,3 @@ extension Data {
 	}
 	
 }
-
-
